@@ -10,7 +10,7 @@ export function createApp() {
 
   app.use(
     cors({
-      origin: ["http://localhost:5173", "https://a-partner.netlify.app/"],
+      origin: ["http://localhost:5173", "https://a-partner.netlify.app"],
       credentials: true,
     }),
   );
