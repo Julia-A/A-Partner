@@ -10,7 +10,7 @@ export function createApp() {
 
   app.use(
     cors({
-      origin: ["http://localhost:5173", "https://YOUR-FRONTEND.onrender.com"],
+      origin: ["http://localhost:5173", "https://a-partner.netlify.app/"],
       credentials: true,
     }),
   );
