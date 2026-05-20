@@ -12,6 +12,19 @@ const milestoneSchema = new mongoose.Schema(
       required: true,
       trim: true,
     },
+    description: {
+      type: String,
+      default: "",
+      trim: true,
+    },
+    startDate: {
+      type: Date,
+      default: null,
+    },
+    targetDate: {
+      type: Date,
+      default: null,
+    },
     completedAt: {
       type: Date,
       default: null,

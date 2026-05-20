@@ -11,7 +11,7 @@ const getDailyCompletions = asyncHandler(async (req, res) => {
   const { days } = req.query;
   const result = await analyticsServices.getDailyCompletions(
     req.user.id,
-    parseInt(days),
+    Number.parseInt(days || "7", 10),
   );
 
   res.json({ data: result });
@@ -21,7 +21,7 @@ const getWeeklyCompletions = asyncHandler(async (req, res) => {
   const { weeks } = req.query;
   const result = await analyticsServices.getWeeklyCompletions(
     req.user.id,
-    parseInt(weeks),
+    Number.parseInt(weeks || "4", 10),
   );
 
   res.json({ data: result });

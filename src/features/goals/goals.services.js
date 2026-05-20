@@ -12,9 +12,14 @@ import mongoose from "mongoose";
 async function create(userId, { title, description, startDate, targetDate }) {
   if (!title) throw new ApiError(400, "Title is required");
 
-  if (!description) description = "";
+  if (!description) throw new ApiError(400, "Description is required");
+  if (!startDate || !targetDate) {
+    throw new ApiError(400, "Start date and target date are required");
+  }
 
   if (startDate && targetDate) {
+    startDate = normalizeToUTCMidnight(startDate);
+    targetDate = normalizeToUTCMidnight(targetDate);
     if (targetDate < startDate) {
       throw new ApiError(400, "Target date must be on or after start date");
     }
@@ -90,19 +95,21 @@ async function update(
 
   // validate dates before assigning the values
 
-  if (startDate !== undefined && targetDate !== undefined) {
-    startDate = normalizeToUTCMidnight(startDate);
-    targetDate = normalizeToUTCMidnight(targetDate);
-    if (targetDate < startDate) {
-      throw new ApiError(
-        400,
-        "Target date should be on or after the start date",
-      );
-    } else if (targetDate >= startDate) {
-      goal.startDate = startDate;
-      goal.targetDate = targetDate;
-    }
+  const nextStartDate =
+    startDate !== undefined ? normalizeToUTCMidnight(startDate) : goal.startDate;
+  const nextTargetDate =
+    targetDate !== undefined ? normalizeToUTCMidnight(targetDate) : goal.targetDate;
+
+  if (nextStartDate && nextTargetDate && nextTargetDate < nextStartDate) {
+    throw new ApiError(400, "Target date should be on or after the start date");
   }
+
+  if (!nextStartDate || !nextTargetDate) {
+    throw new ApiError(400, "Start date and target date are required");
+  }
+
+  if (startDate !== undefined) goal.startDate = nextStartDate;
+  if (targetDate !== undefined) goal.targetDate = nextTargetDate;
 
   await goal.save();
   return goal;

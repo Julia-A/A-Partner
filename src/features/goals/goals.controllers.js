@@ -71,13 +71,13 @@ const delete_ = asyncHandler(async (req, res) => {
 const complete = asyncHandler(async (req, res) => {
   const result = await goalServices.complete(req.user.id, req.params.goalId);
 
-  res.json({ goal: result });
+  res.json(result);
 });
 
 const uncomplete = asyncHandler(async (req, res) => {
   const result = await goalServices.uncomplete(req.user.id, req.params.goalId);
 
-  res.json({ goal: result });
+  res.json(result);
 });
 
 // create sub goal

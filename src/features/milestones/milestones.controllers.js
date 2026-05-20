@@ -2,12 +2,12 @@ import asyncHandler from "../../utils/asyncHandler.js";
 import { milestoneServices } from "./milestones.services.js";
 
 export const create = asyncHandler(async (req, res) => {
-  const { title } = req.body;
+  const { title, description, startDate, targetDate } = req.body;
 
   const result = await milestoneServices.create(
     req.user.id,
     req.params.goalId,
-    { title},
+    { title, description, startDate, targetDate },
   );
 
   res.status(201).json({ milestone: result });
@@ -32,12 +32,12 @@ export const getById = asyncHandler(async (req, res) => {
 });
 
 export const update = asyncHandler(async (req, res) => {
-  const { title } = req.body;
+  const { title, description, startDate, targetDate } = req.body;
 
   const result = await milestoneServices.update(
     req.user.id,
     req.params.milestoneId,
-    { title },
+    { title, description, startDate, targetDate },
   );
 
   res.json({ milestone: result });

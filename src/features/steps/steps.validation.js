@@ -19,5 +19,5 @@ export const validateStepId = Joi.object({
 export const updateStepSchema = Joi.object({
   title: Joi.string().trim().min(1).empty("").optional(),
   startDate: Joi.string().isoDate().optional(),
-  targetDate: Joi.string().isoDate().optional(),
+  endDate: Joi.string().isoDate().optional(),
 }).min(1);

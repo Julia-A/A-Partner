@@ -9,7 +9,72 @@ import {
   deductXP,
   updateStreak,
 } from "../Gamification/userProfile.services.js";
+import { UserProfile } from "../Gamification/userProfile.models.js";
 import { normalizeToUTCMidnight } from "../../utils/date.js";
+
+function assertStepWithinGoalTimeline(startDate, endDate, goal) {
+  if (!goal) throw new ApiError(404, "Goal not found");
+
+  if (startDate && goal.startDate && startDate < goal.startDate) {
+    throw new ApiError(400, "Step start date must be within the goal timeline");
+  }
+
+  if (endDate && goal.targetDate && endDate > goal.targetDate) {
+    throw new ApiError(400, "Step end date must be within the goal timeline");
+  }
+}
+
+async function recalculateStreakFromSteps(userId) {
+  const userGoals = await Goal.find({ userId }).select("_id");
+  const goalIds = userGoals.map((g) => g._id);
+  const userMilestones = await Milestone.find({ goalId: { $in: goalIds } }).select("_id");
+  const milestoneIds = userMilestones.map((m) => m._id);
+
+  const completedSteps = await Step.find({
+    milestoneId: { $in: milestoneIds },
+    status: "completed",
+    completedAt: { $ne: null },
+  }).select("completedAt");
+
+  const completedDates = [
+    ...new Set(completedSteps.map((s) => s.completedAt.toISOString().split("T")[0])),
+  ].sort();
+
+  let currentStreak = 0;
+  let bestStreak = 0;
+  let previousDate = null;
+
+  for (const dateStr of completedDates) {
+    if (!previousDate) {
+      currentStreak = 1;
+    } else {
+      const previous = new Date(previousDate);
+      previous.setUTCDate(previous.getUTCDate() + 1);
+      const expectedNext = previous.toISOString().split("T")[0];
+      currentStreak = dateStr === expectedNext ? currentStreak + 1 : 1;
+    }
+    bestStreak = Math.max(bestStreak, currentStreak);
+    previousDate = dateStr;
+  }
+
+  const today = new Date().toISOString().split("T")[0];
+  const yesterday = new Date();
+  yesterday.setUTCDate(yesterday.getUTCDate() - 1);
+  const yesterdayStr = yesterday.toISOString().split("T")[0];
+
+  if (previousDate !== today && previousDate !== yesterdayStr) {
+    currentStreak = 0;
+  }
+
+  await UserProfile.findOneAndUpdate(
+    { userId },
+    {
+      currentStreak,
+      bestStreak,
+      lastCompletionDate: previousDate ? new Date(previousDate) : null,
+    },
+  );
+}
 
 async function create(
   userId,
@@ -21,16 +86,26 @@ async function create(
     userId,
     milestoneId,
   );
+  const goal = await Goal.findById(milestone.goalId);
 
-  if (startDate && endDate && endDate < startDate) {
+  const normalizedStartDate = normalizeToUTCMidnight(startDate);
+  const normalizedEndDate = normalizeToUTCMidnight(endDate);
+
+  if (!normalizedStartDate || !normalizedEndDate) {
+    throw new ApiError(400, "Step start date and end date are required");
+  }
+
+  if (normalizedStartDate && normalizedEndDate && normalizedEndDate < normalizedStartDate) {
     throw new ApiError(400, "End date must be on or after start date");
   }
+
+  assertStepWithinGoalTimeline(normalizedStartDate, normalizedEndDate, goal);
 
   const step = await Step.create({
     milestoneId,
     title,
-    startDate: normalizeToUTCMidnight(startDate) || null,
-    endDate: normalizeToUTCMidnight(endDate) || null,
+    startDate: normalizedStartDate,
+    endDate: normalizedEndDate,
     status: "pending",
   });
 
@@ -75,12 +150,25 @@ async function update(userId, stepId, { title, startDate, endDate }) {
     step.title = title;
   }
 
-  if (startDate !== undefined) step.startDate = startDate || null;
-  if (endDate !== undefined) step.endDate = endDate || null;
+  const nextStartDate =
+    startDate !== undefined ? normalizeToUTCMidnight(startDate) : step.startDate;
+  const nextEndDate =
+    endDate !== undefined ? normalizeToUTCMidnight(endDate) : step.endDate;
 
-  if (startDate && endDate && endDate > startDate) {
+  if (nextStartDate && nextEndDate && nextEndDate < nextStartDate) {
     throw new ApiError(400, "End date must be on or after start date");
   }
+
+  if (!nextStartDate || !nextEndDate) {
+    throw new ApiError(400, "Step start date and end date are required");
+  }
+
+  const milestone = await Milestone.findById(step.milestoneId);
+  const goal = milestone ? await Goal.findById(milestone.goalId) : null;
+  assertStepWithinGoalTimeline(nextStartDate, nextEndDate, goal);
+
+  if (startDate !== undefined) step.startDate = nextStartDate;
+  if (endDate !== undefined) step.endDate = nextEndDate;
 
   await step.save();
   return step;
@@ -100,6 +188,7 @@ async function complete(userId, stepId) {
   try {
     let xpAwarded = 0;
     let milestoneCompleted = false;
+    let goalCompleted = false;
 
     // Mark step as completed
     step.status = "completed";
@@ -124,14 +213,15 @@ async function complete(userId, stepId) {
       siblingSteps.every((s) => s.status === "completed");
 
     if (allCompleted) {
-      await milestoneServices.autoComplete(userId, step.milestoneId);
+      const result = await milestoneServices.autoComplete(userId, step.milestoneId);
       xpAwarded += 50;
 
       milestoneCompleted = true;
+      goalCompleted = Boolean(result?.goalCompleted);
     }
 
     await session.commitTransaction();
-    return { step, xpAwarded, milestoneCompleted };
+    return { step, xpAwarded, milestoneCompleted, goalCompleted };
   } catch (err) {
     await session.abortTransaction();
     throw err;
@@ -150,6 +240,7 @@ async function uncomplete(userId, stepId) {
 
   const session = await mongoose.startSession();
   session.startTransaction();
+  let result;
 
   try {
     let xpDeducted = 0;
@@ -176,15 +267,17 @@ async function uncomplete(userId, stepId) {
     }
 
     // DO NOT modify streak
-    // The streak is date based. Other steps may have been completed this same day
     await session.commitTransaction();
-    return { step, xpDeducted, milestoneUncompleted };
+    result = { step, xpDeducted, milestoneUncompleted };
   } catch (err) {
     await session.abortTransaction();
     throw err;
   } finally {
     session.endSession();
   }
+
+  await recalculateStreakFromSteps(userId);
+  return result;
 }
 
 async function delete_(userId, stepId) {
@@ -232,6 +325,8 @@ async function delete_(userId, stepId) {
   } finally {
     session.endSession();
   }
+
+  await recalculateStreakFromSteps(userId);
 }
 
 async function getTodayFocus(userId) {

@@ -7,6 +7,8 @@ import { sendRegistrationMail, sendResetPasswordMail } from "./auth.emails.js";
 import { createProfile } from "../Gamification/userProfile.services.js";
 import { generateOtp, hashToken, signAccessToken } from "../../utils/token.js";
 const APP_NAME = process.env.APP_NAME;
+const REFRESH_TOKEN_TTL_MS = 7 * 24 * 60 * 60 * 1000;
+const FRONTEND_URL = process.env.FRONTEND_URL || "http://localhost:5173";
 
 // Register newly
 async function register(name, email, password) {
@@ -40,7 +42,7 @@ async function register(name, email, password) {
   await RefreshToken.create({
     userId: user._id,
     token: refreshToken,
-    expiresAt: new Date(Date.now() + 7 * 24 * 60 * 1000),
+    expiresAt: new Date(Date.now() + REFRESH_TOKEN_TTL_MS),
   });
 
   // send registration mail
@@ -84,7 +86,7 @@ async function login(email, password) {
   await RefreshToken.create({
     userId: user._id,
     token: refreshToken,
-    expiresAt: new Date(Date.now() + 7 * 24 * 60 * 1000),
+    expiresAt: new Date(Date.now() + REFRESH_TOKEN_TTL_MS),
   });
 
   // return safe info
@@ -127,7 +129,7 @@ async function refresh(refreshToken) {
   await RefreshToken.create({
     userId: token.userId,
     token: newRefreshToken,
-    expiresAt: new Date(Date.now() + 7 * 24 * 60 * 1000),
+    expiresAt: new Date(Date.now() + REFRESH_TOKEN_TTL_MS),
   });
 
   const accessToken = signAccessToken({ sub: token.userId });
@@ -175,7 +177,7 @@ async function forgotPassword(email) {
   // Send email to user with a reset link
   sendResetPasswordMail({
     to: user.email,
-    resetUrl: `http://localhost:3000/api/auth/reset-password?token=${token}`,
+    resetUrl: `${FRONTEND_URL}/reset-password?token=${token}`,
   });
 
   return { message: "If an account exists, a reset link has been sent" };
@@ -260,7 +262,7 @@ async function changePassword(
 
   if (!refreshToken) throw new ApiError(404, "Refresh token not found");
 
-  if (refreshToken.usedAt) throw new ApiError(400, "Token Reuse detected ");
+  if (refreshToken.revokedAt) throw new ApiError(400, "Token reuse detected");
 
   if (refreshToken.expiresAt < new Date())
     throw new ApiError(400, "Refresh token expired");

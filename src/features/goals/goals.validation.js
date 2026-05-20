@@ -10,7 +10,7 @@ export const goalSchema = Joi.object({
 
   targetDate: Joi.string().isoDate().required(),
 
-  description: Joi.string().trim().lowercase().max(2000),
+  description: Joi.string().trim().min(1).max(2000).required(),
 });
 
 export const listAllGoalsSchema = Joi.object({
@@ -28,7 +28,7 @@ export const getSpecificGoalSchema = Joi.object({
 
 export const updateGoalSchema = Joi.object({
   title: Joi.string().trim().min(1).empty("").optional(),
-  description: Joi.string().trim().empty("").optional(),
+  description: Joi.string().trim().min(1).empty("").optional(),
   startDate: Joi.string().isoDate().optional(),
   targetDate: Joi.string().isoDate().optional(),
 }).min(1);

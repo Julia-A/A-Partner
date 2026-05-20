@@ -140,7 +140,11 @@ export async function updateStreak(userId) {
 
   const today = new Date().toISOString().split("T")[0]; // 'YYYY-MM-DD'
 
-  if (profile.lastCompletionDate === today) {
+  const lastCompletionDate = profile.lastCompletionDate
+    ? profile.lastCompletionDate.toISOString().split("T")[0]
+    : null;
+
+  if (lastCompletionDate === today) {
     return profile; // that means today has already been counted, no change
   }
 
@@ -148,7 +152,7 @@ export async function updateStreak(userId) {
   yesterday.setDate(yesterday.getDate() - 1);
   const yesterdayStr = yesterday.toISOString().split("T")[0];
 
-  if (profile.lastCompletionDate === yesterdayStr) {
+  if (lastCompletionDate === yesterdayStr) {
     profile.currentStreak += 1; // continue the streak
   } else {
     profile.currentStreak = 1; // streak is broken, start new one

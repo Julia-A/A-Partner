@@ -45,6 +45,7 @@ const complete = asyncHandler(async (req, res) => {
     step: result.step,
     xpAwarded: result.xpAwarded,
     milestoneCompleted: result.milestoneCompleted,
+    goalCompleted: result.goalCompleted,
   });
 });
 

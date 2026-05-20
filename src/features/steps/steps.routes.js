@@ -38,7 +38,7 @@ stepRoutes.post(
 stepRoutes.delete(
   "/:stepId",
   requireAuth,
-  joiValidate(validateStepId),
+  joiValidate(validateStepId, "params"),
   stepController.delete_,
 );
 
